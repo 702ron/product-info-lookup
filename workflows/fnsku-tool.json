@@ -1,0 +1,117 @@
+{
+  "name": "FNSKU Tool",
+  "description": "Converts Amazon FNSKU codes to ASINs using external API with caching via NocoDB",
+  "nodes": [
+    {
+      "parameters": {
+        "authentication": "nocoDbApiToken",
+        "operation": "getAll",
+        "projectId": "{{NOCODB_PROJECT_ID}}",
+        "table": "{{NOCODB_FNSKU_TABLE_ID}}",
+        "options": {
+          "where": "=(FNSKU,eq,{{ $json.id }})"
+        }
+      },
+      "name": "Search for FNSKU",
+      "type": "n8n-nodes-base.nocoDb",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ato.fnskutoasin.com/api/v1/ScanTask/AddOrGet",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "accept", "value": "application/json" },
+            { "name": "api-key", "value": "{{FNSKU_API_KEY}}" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "barCode", "value": "={{ $('Execute Workflow Trigger').all()[0].json.id }}" }
+          ]
+        }
+      },
+      "name": "FNSKU API Call",
+      "type": "n8n-nodes-base.httpRequest",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.data.asin }}",
+              "operator": { "type": "string", "operation": "notEmpty", "singleValue": true }
+            }
+          ]
+        }
+      },
+      "name": "If Data",
+      "type": "n8n-nodes-base.if"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "name": "type", "value": "FNSKU", "type": "string" },
+            { "name": "ASIN", "value": "={{ $json.data.asin }}", "type": "string" }
+          ]
+        }
+      },
+      "name": "FNSKU ASIN JSON",
+      "type": "n8n-nodes-base.set"
+    },
+    {
+      "parameters": {},
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger"
+    },
+    {
+      "parameters": {
+        "workflowId": "{{ASIN_TOOL_WORKFLOW_ID}}",
+        "options": {}
+      },
+      "name": "Execute ASIN Tool",
+      "type": "n8n-nodes-base.executeWorkflow"
+    },
+    {
+      "parameters": {
+        "authentication": "nocoDbApiToken",
+        "operation": "create",
+        "projectId": "{{NOCODB_PROJECT_ID}}",
+        "table": "{{NOCODB_FNSKU_TABLE_ID}}",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldName": "FNSKU", "fieldValue": "={{ $('FNSKU API Call').item.json.data.barCode }}" },
+            { "fieldName": "ASIN", "fieldValue": "={{ $('FNSKU API Call').item.json.data.asin }}" }
+          ]
+        }
+      },
+      "name": "Create FNSKU Record",
+      "type": "n8n-nodes-base.nocoDb"
+    },
+    {
+      "parameters": { "amount": 10 },
+      "name": "Wait",
+      "type": "n8n-nodes-base.wait",
+      "comment": "Wait for FNSKU lookup service to process the request"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "name": "message", "value": "Unable to locate FNSKU", "type": "string" },
+            { "name": "success", "value": false, "type": "boolean" }
+          ]
+        }
+      },
+      "name": "Not Found Response",
+      "type": "n8n-nodes-base.set"
+    }
+  ],
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "Tool" }, { "name": "API Toolset" }]
+}

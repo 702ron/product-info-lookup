@@ -1,0 +1,92 @@
+{
+  "name": "Lot Lookup Tool",
+  "description": "Fetches product information from Airtable inventory by internal lot number",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "{{AIRTABLE_BASE_ID}}",
+          "mode": "list",
+          "cachedResultName": "Inventory"
+        },
+        "table": {
+          "__rl": true,
+          "value": "{{AIRTABLE_TABLE_ID}}",
+          "mode": "list",
+          "cachedResultName": "Inventory"
+        },
+        "filterByFormula": "={Lot Number}={{ $json.id.toNumber() }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "name": "Airtable"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $itemIndex }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "equals" }
+            },
+            {
+              "leftValue": "={{ $json.id }}",
+              "operator": { "type": "string", "operation": "exists", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.filter",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "name": "Product", "value": "={{ $json['Product Name'] || '' }}", "type": "string" },
+            { "name": "Description", "value": "={{ $json.Description || '' }}", "type": "string" },
+            { "name": "Image", "value": "={{ $json['Image 1'][0].url || '' }}", "type": "string" },
+            { "name": "MSRP", "value": "={{ $json.MSRP || '' }}", "type": "string" },
+            { "name": "Link", "value": "={{ $json.Link || '' }}", "type": "string" },
+            { "name": "UPC", "value": "={{ $json.UPC || '' }}", "type": "string" },
+            { "name": "ASIN", "value": "={{ $json['B00 ASIN'] || '' }}", "type": "string" },
+            { "name": "Category", "value": "={{ $json.Category || '' }}", "type": "string" }
+          ]
+        }
+      },
+      "name": "Map Fields",
+      "type": "n8n-nodes-base.set"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "name": "response", "value": "={{ $json }}", "type": "object" },
+            { "name": "success", "value": true, "type": "boolean" }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.set",
+      "name": "Set Response"
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": { "main": [[{ "node": "Airtable", "type": "main", "index": 0 }]] },
+    "Airtable": { "main": [[{ "node": "Filter", "type": "main", "index": 0 }]] },
+    "Filter": { "main": [[{ "node": "Map Fields", "type": "main", "index": 0 }]] },
+    "Map Fields": { "main": [[{ "node": "Set Response", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "sub-workflow" }]
+}

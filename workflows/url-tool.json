@@ -1,0 +1,158 @@
+{
+  "name": "URL Tool",
+  "description": "Fetches product information from retailer URLs (Amazon, Walmart, Target, Home Depot) using specialized APIs and AI-powered extraction",
+  "nodes": [
+    {
+      "parameters": {
+        "authentication": "nocoDbApiToken",
+        "operation": "getAll",
+        "projectId": "{{NOCODB_PROJECT_ID}}",
+        "table": "{{NOCODB_URL_TABLE_ID}}",
+        "limit": 1,
+        "options": {
+          "where": "=(JSON,like,{{ $json.url }})"
+        }
+      },
+      "type": "n8n-nodes-base.nocoDb",
+      "name": "NocoDB",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "name": "api_key", "value": "{{WALMART_API_KEY}}", "type": "string" },
+            { "name": "source", "value": "walmart", "type": "string" },
+            { "name": "api_url", "value": "https://api.bluecartapi.com/request", "type": "string" },
+            { "name": "search_url", "value": "={{ $('Execute Workflow Trigger').item.json.url.toLowerCase() }}", "type": "string" }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.set",
+      "name": "Walmart"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "name": "api_key", "value": "{{TARGET_API_KEY}}", "type": "string" },
+            { "name": "source", "value": "target", "type": "string" },
+            { "name": "api_url", "value": "https://api.redcircleapi.com/request", "type": "string" },
+            { "name": "search_url", "value": "={{ $('Execute Workflow Trigger').item.json.url }}", "type": "string" }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.set",
+      "name": "Target"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "name": "api_key", "value": "{{HOMEDEPOT_API_KEY}}", "type": "string" },
+            { "name": "source", "value": "homedepot", "type": "string" },
+            { "name": "api_url", "value": "https://api.bigboxapi.com/request", "type": "string" },
+            { "name": "search_url", "value": "={{ $('Execute Workflow Trigger').item.json.url }}", "type": "string" }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.set",
+      "name": "HomeDepot"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "name": "api_key", "value": "{{AMAZON_API_KEY}}", "type": "string" },
+            { "name": "source", "value": "amazon", "type": "string" },
+            { "name": "api_url", "value": "https://api.asindataapi.com/request", "type": "string" },
+            { "name": "search_url", "value": "={{ $('Execute Workflow Trigger').item.json.url }}", "type": "string" }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.set",
+      "name": "Amazon"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.api_url }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "api_key", "value": "={{ $json.api_key }}" },
+            { "name": "type", "value": "product" },
+            { "name": "url", "value": "={{ $json.search_url.toLowerCase() }}" }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "name": "Get URL"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "You are categorizing products based on their name and description. Output only one category from the following list that best matches the product. Provide no additional text or explanation.\n\nCategories: appliances, arts & crafts, automotive, furniture, baby products, beauty & personal care, cell phones & accessories, clothing, electronics, computers & accessories, grocery & gourmet food, health & household, home & kitchen, kitchen & dining, industrial & scientific, musical instruments, office products, lawn & garden, pet supplies, sports & fitness, tools & home improvement, toys & games, video games, misc, sports & outdoors, movies & tv, books\n\nProduct:\nName: {{ $json.Title }}\nDescription: {{ $json.Description }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "name": "AI Agent - Categorize"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.0-flash",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "name": "Google Gemini Chat Model"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "name": "Execute Workflow Trigger"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.firecrawl.dev/v1/scrape",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Authorization", "value": "Bearer {{FIRECRAWL_API_KEY}}" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{ \"url\": \"{{ $('Execute Workflow Trigger').item.json.url }}\", \"formats\": [\"markdown\", \"html\"] }"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "name": "Firecrawl Scrape",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "Please extract the following product information from the provided markdown content:\n\n1. Product Name\n2. MSRP (value only, no currency symbol)\n3. Product Description\n4. Main Image URL\n5. UPC (if available)\n6. Other ID (ASIN, GTIN, etc.)\n\nFormat as JSON:\n{\n  \"product_name\": \"...\",\n  \"msrp\": \"...\",\n  \"description\": \"...\",\n  \"main_image_url\": \"...\",\n  \"upc\": \"...\",\n  \"other_id\": \"...\"\n}",
+        "hasOutputParser": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "name": "AI Agent - Extract Product Data"
+    },
+    {
+      "parameters": {
+        "model": { "__rl": true, "mode": "list", "value": "gpt-4o-mini" },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "name": "OpenAI Chat Model"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{ \"type\": \"object\", \"required\": [\"product_name\", \"msrp\", \"description\", \"main_image_url\"], \"properties\": { \"product_name\": { \"type\": \"string\" }, \"msrp\": { \"type\": \"string\" }, \"description\": { \"type\": \"string\" }, \"main_image_url\": { \"type\": \"string\", \"format\": \"uri\" }, \"upc\": { \"type\": [\"string\", \"null\"] }, \"asin\": { \"type\": [\"string\", \"null\"] } } }"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "name": "Structured Output Parser"
+    }
+  ],
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "API Toolset" }]
+}

@@ -1,0 +1,132 @@
+{
+  "name": "UPC Tool",
+  "description": "Looks up product information by UPC/barcode across multiple retail APIs with AI-powered categorization",
+  "nodes": [
+    {
+      "parameters": {
+        "authentication": "nocoDbApiToken",
+        "operation": "getAll",
+        "projectId": "{{NOCODB_PROJECT_ID}}",
+        "table": "{{NOCODB_UPC_TABLE_ID}}",
+        "limit": 1,
+        "options": {
+          "where": "=(Barcode Number,eq,{{ $json.id }})"
+        }
+      },
+      "name": "Search for UPC",
+      "type": "n8n-nodes-base.nocoDb",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "url": "https://api.barcodelookup.com/v3/products",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "barcode", "value": "={{ $('Execute Workflow Trigger').first().json.id }}" },
+            { "name": "formatted", "value": "y" },
+            { "name": "key", "value": "{{BARCODE_LOOKUP_API_KEY}}" }
+          ]
+        }
+      },
+      "name": "Barcode Lookup Call",
+      "type": "n8n-nodes-base.httpRequest",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://api.bluecartapi.com/request",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "api_key", "value": "{{WALMART_API_KEY}}" },
+            { "name": "type", "value": "product" },
+            { "name": "gtin", "value": "={{ $('Execute Workflow Trigger').item.json.id }}" }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "name": "Walmart",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://api.bigboxapi.com/request",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "api_key", "value": "{{HOMEDEPOT_API_KEY}}" },
+            { "name": "type", "value": "product" },
+            { "name": "gtin", "value": "={{ $('Execute Workflow Trigger').item.json.id }}" }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "name": "Home Depot",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://api.redcircleapi.com/request",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "api_key", "value": "{{TARGET_API_KEY}}" },
+            { "name": "type", "value": "product" },
+            { "name": "gtin", "value": "={{ $('Execute Workflow Trigger').item.json.id }}" }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "name": "Target",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "You are categorizing products based on their name and description. Output only one category from the following list that best matches the product.\n\nCategories: appliances, arts & crafts, automotive, furniture, baby products, beauty & personal care, electronics, computers & accessories, grocery & gourmet food, health & household, home & kitchen, industrial & scientific, musical instruments, office products, lawn & garden, pet supplies, sports & fitness, tools & home improvement, toys & games, video games, misc\n\nProduct:\nName: {{ $json.Product }}\nDescription: {{ $json.Description }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "name": "AI Agent - Categorize"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.0-flash",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "name": "Google Gemini Chat Model"
+    },
+    {
+      "parameters": {},
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger"
+    },
+    {
+      "parameters": {
+        "authentication": "nocoDbApiToken",
+        "operation": "create",
+        "projectId": "{{NOCODB_PROJECT_ID}}",
+        "table": "{{NOCODB_UPC_TABLE_ID}}",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldName": "Title", "fieldValue": "={{ $json.Product }}" },
+            { "fieldName": "Barcode Number", "fieldValue": "={{ $('Execute Workflow Trigger').item.json.id }}" },
+            { "fieldName": "ASIN", "fieldValue": "={{ $json.ASIN }}" },
+            { "fieldName": "Price", "fieldValue": "={{ $json.MSRP }}" },
+            { "fieldName": "Link", "fieldValue": "={{ $json.Link }}" },
+            { "fieldName": "Image", "fieldValue": "={{ $json.Image }}" },
+            { "fieldName": "Description", "fieldValue": "={{ $json.Description }}" },
+            { "fieldName": "Category", "fieldValue": "={{ $json.Category }}" }
+          ]
+        }
+      },
+      "name": "Add to NocoDB",
+      "type": "n8n-nodes-base.nocoDb"
+    }
+  ],
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "API Toolset" }, { "name": "sub-workflow" }]
+}

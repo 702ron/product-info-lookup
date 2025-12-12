@@ -1,0 +1,147 @@
+{
+  "name": "NoCoDB ASIN Tool",
+  "description": "Fetches Amazon product information by ASIN with caching via NocoDB and automatic price updates",
+  "nodes": [
+    {
+      "parameters": {
+        "authentication": "nocoDbApiToken",
+        "operation": "getAll",
+        "projectId": "{{NOCODB_PROJECT_ID}}",
+        "table": "{{NOCODB_ASIN_TABLE_ID}}",
+        "options": {
+          "where": "=(ASIN,eq,{{ $json.ASIN }})"
+        }
+      },
+      "name": "Get Record by ASIN",
+      "type": "n8n-nodes-base.nocoDb",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "name": "Product", "value": "={{ $json.Product }}", "type": "string" },
+            { "name": "Link", "value": "={{ $json.Link }}", "type": "string" },
+            { "name": "Image", "value": "={{ $json['Stock Photo'] }}", "type": "string" },
+            { "name": "ASIN", "value": "={{ $json.ASIN }}", "type": "string" },
+            { "name": "Categories", "value": "={{ $json.Categories }}", "type": "string" },
+            { "name": "MSRP", "value": "={{ $json.MSRP }}", "type": "string" },
+            { "name": "Description", "value": "={{ $json['Description'] || '' }}", "type": "string" }
+          ]
+        }
+      },
+      "name": "Map Response Fields",
+      "type": "n8n-nodes-base.set"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.Id }}",
+              "operator": { "type": "number", "operation": "exists", "singleValue": true }
+            }
+          ]
+        }
+      },
+      "name": "If ASIN is Found",
+      "type": "n8n-nodes-base.if"
+    },
+    {
+      "parameters": {
+        "authentication": "nocoDbApiToken",
+        "operation": "create",
+        "projectId": "{{NOCODB_PROJECT_ID}}",
+        "table": "{{NOCODB_ASIN_TABLE_ID}}",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldName": "Response", "fieldValue": "={{ $json }}" },
+            { "fieldName": "Product", "fieldValue": "={{ $json.product.title }}" },
+            { "fieldName": "ASIN", "fieldValue": "={{ $json.product.asin }}" },
+            { "fieldName": "Link", "fieldValue": "={{ $json.product.link }}" },
+            { "fieldName": "Stock Photo", "fieldValue": "={{ $json.product.main_image.link }}" },
+            { "fieldName": "Categories", "fieldValue": "={{ $json.product.categories_flat.replaceAll(' > ', ' , ') }}" },
+            { "fieldName": "MSRP", "fieldValue": "={{ $json.product.buybox_winner.price.value || '' }}" },
+            { "fieldName": "Description", "fieldValue": "={{ $json.product.description || '' }}" },
+            { "fieldName": "Keywords", "fieldValue": "={{ $json.product.keywords }}" },
+            { "fieldName": "Feature Bullets", "fieldValue": "={{ $json.product.feature_bullets?.toJsonString() || '' }}" }
+          ]
+        }
+      },
+      "name": "Save to NocoDB",
+      "type": "n8n-nodes-base.nocoDb"
+    },
+    {
+      "parameters": {},
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger"
+    },
+    {
+      "parameters": {
+        "url": "https://api.asindataapi.com/request",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "api_key", "value": "{{AMAZON_ASIN_API_KEY}}" },
+            { "name": "amazon_domain", "value": "amazon.com" },
+            { "name": "asin", "value": "={{ $('Execute Workflow Trigger').all()[0].json.ASIN }}" },
+            { "name": "type", "value": "product" }
+          ]
+        }
+      },
+      "name": "Amazon Product API",
+      "type": "n8n-nodes-base.httpRequest",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "name": "response", "value": "={{ $json }}", "type": "object" },
+            { "name": "success", "value": true, "type": "boolean" }
+          ]
+        }
+      },
+      "name": "Set Success Response",
+      "type": "n8n-nodes-base.set"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.message }}",
+              "rightValue": "Product not found.",
+              "operator": { "type": "string", "operation": "notEquals" }
+            }
+          ]
+        }
+      },
+      "name": "If Product Found",
+      "type": "n8n-nodes-base.if"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "name": "success", "value": false, "type": "boolean" },
+            { "name": "message", "value": "={{ $json.message }}", "type": "string" }
+          ]
+        }
+      },
+      "name": "Set Error Response",
+      "type": "n8n-nodes-base.set"
+    },
+    {
+      "parameters": {
+        "workflowId": "{{PRICE_LOOKUP_WORKFLOW_ID}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "name": "Execute Price Lookup",
+      "comment": "Updates price if cached data is stale"
+    }
+  ],
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "API Toolset" }, { "name": "NoCoDB" }, { "name": "AI Tool" }]
+}

@@ -1,0 +1,202 @@
+{
+  "name": "Product Lookup Main",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "// Array to store the results\nconst results = [];\nconst mixedID = $('Webhook').all()[0].json.body['mixedID']?.trim() || '';\nif (mixedID.length < 2) {\n  results.push({ type: \"length\", message: \"Input is too short\", valid: false });\n} else {\n  // Check if it contains \"RUG\"\n  if (mixedID.includes(\"RUG\")) {\n    results.push({ type: \"RUG\", id: mixedID });\n  } else {\n    const urlRegex = /^(?:https?:\\/\\/)?(?:www\\.)?[-a-zA-Z0-9@:%._\\+~#=]{1,256}\\.[a-zA-Z0-9()]{1,6}\\b(?:[-a-zA-Z0-9()@:%_\\+.~#?&//=]*)$/;\n    const lowerCaseForTest = mixedID.toLowerCase();\n    const firstTwoChars = mixedID.substring(0, 2);\n\n    if (urlRegex.test(lowerCaseForTest)) {\n      const baseUrl = mixedID.split('?')[0];\n      results.push({ type: \"URL\", url: baseUrl.toLowerCase() });\n    }\n    else if (firstTwoChars === \"X0\") {\n      results.push({ type: \"FNSKU\", id: mixedID });\n    }\n    else if (firstTwoChars === \"B0\") {\n      results.push({ type: \"ASIN\", ASIN: mixedID });\n    }\n    else if (/^\\d{6}$/.test(mixedID)) {\n      results.push({ type: \"LOT\", id: mixedID });\n    }\n    else if (/^\\d+$/.test(mixedID) && ((mixedID.length >= 7 && mixedID.length <= 8) || (mixedID.length >= 10 && mixedID.length <= 14))) {\n      results.push({ type: \"UPC\", id: mixedID });\n    }\n  }\n  if (results.length === 0) {\n    results.push({ type: \"none\", message: \"Input doesn't match any specified conditions\", valid: false });\n  }\n}\nreturn results;"
+      },
+      "id": "code-node",
+      "name": "Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1856, 1056]
+    },
+    {
+      "parameters": {
+        "workflowId": "{{FNSKU_TOOL_WORKFLOW_ID}}",
+        "options": {}
+      },
+      "id": "fnsku-tool",
+      "name": "FNSKU Tool",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [-1216, 960],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "workflowId": "{{UPC_TOOL_WORKFLOW_ID}}",
+        "options": {}
+      },
+      "id": "upc-tool",
+      "name": "UPC Tool",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [-1216, 784]
+    },
+    {
+      "parameters": {
+        "workflowId": "{{ASIN_TOOL_WORKFLOW_ID}}",
+        "options": {}
+      },
+      "id": "asin-tool",
+      "name": "NoCoDB ASIN Tool",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [-1216, 608]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [-768, 1008]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "{{YOUR_WEBHOOK_PATH}}",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-2064, 1056],
+      "webhookId": "{{YOUR_WEBHOOK_ID}}"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type.trim() }}",
+                    "rightValue": "ASIN",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "ASIN"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type.trim() }}",
+                    "rightValue": "UPC",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "UPC"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type.trim() }}",
+                    "rightValue": "FNSKU",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "FNSKU"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type.trim() }}",
+                    "rightValue": "=URL",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "URL"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type.trim() }}",
+                    "rightValue": "LOT",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "LOT"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "switch",
+      "name": "Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [-1664, 992]
+    },
+    {
+      "parameters": {
+        "workflowId": "{{URL_TOOL_WORKFLOW_ID}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [-1216, 1136],
+      "id": "url-tool",
+      "name": "URL Tool"
+    },
+    {
+      "parameters": {
+        "workflowId": "{{LOT_LOOKUP_WORKFLOW_ID}}",
+        "options": { "waitForSubWorkflow": true }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [-1216, 1328],
+      "id": "lot-lookup",
+      "name": "Lot Lookup"
+    }
+  ],
+  "connections": {
+    "Code": { "main": [[{ "node": "Switch", "type": "main", "index": 0 }]] },
+    "UPC Tool": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] },
+    "FNSKU Tool": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] },
+    "NoCoDB ASIN Tool": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] },
+    "Webhook": { "main": [[{ "node": "Code", "type": "main", "index": 0 }]] },
+    "Switch": {
+      "main": [
+        [{ "node": "NoCoDB ASIN Tool", "type": "main", "index": 0 }],
+        [{ "node": "UPC Tool", "type": "main", "index": 0 }],
+        [{ "node": "FNSKU Tool", "type": "main", "index": 0 }],
+        [{ "node": "URL Tool", "type": "main", "index": 0 }],
+        [{ "node": "Lot Lookup", "type": "main", "index": 0 }]
+      ]
+    },
+    "URL Tool": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] },
+    "Lot Lookup": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Los_Angeles",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [{ "name": "API Toolset" }]
+}
