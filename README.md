@@ -20,6 +20,20 @@ A unified product information lookup API that automatically detects identifier t
 - **AI Product Categorization** - Automatic category assignment using Google Gemini for consistent taxonomy across sources
 - **Inventory Integration** - Airtable lookup for internal lot numbers linking to existing inventory management
 
+## External API Data Sources
+
+This system aggregates product data from multiple third-party APIs to provide comprehensive product information:
+
+| API Service | Purpose | Data Retrieved |
+|-------------|---------|----------------|
+| [ASIN Data API](https://www.asindataapi.com/) | Amazon product lookup | Title, price, images, categories, descriptions, feature bullets |
+| [BlueCart API](https://www.bluecartapi.com/) | Walmart product data | Product details, pricing, availability |
+| [RedCircle API](https://www.redcircleapi.com/) | Target product data | Product info, pricing, categories |
+| [BigBox API](https://www.bigboxapi.com/) | Home Depot product data | Product specs, pricing, availability |
+| [Barcode Lookup API](https://www.barcodelookup.com/api) | UPC/EAN database | Product info from barcode scans |
+| [FNSKUtoASIN](https://fnskutoasin.com/) | Amazon FBA code resolution | FNSKU to ASIN conversion |
+| [Firecrawl](https://firecrawl.dev/) | Web scraping fallback | Structured page content extraction |
+
 ## Demo
 
 ### Main Workflow - Identifier Router
@@ -58,6 +72,36 @@ Retrieves product data from Airtable inventory by internal lot number:
 
 [![Lot Lookup](./screenshots/lot-lookup-workflow.png)](./screenshots/lot-lookup-workflow.png)
 
+## NocoDB Caching Layer
+
+Product data is cached in NocoDB to minimize API calls and reduce costs. The cache stores comprehensive product information including pricing history:
+
+[![NocoDB Cache Table](./screenshots/nocodb-cache-table.png)](./screenshots/nocodb-cache-table.png)
+
+### Cache Table Structure
+
+```
+┌─────────────┬──────────────┬─────────────────────────────────────────────────┐
+│ Column      │ Type         │ Description                                     │
+├─────────────┼──────────────┼─────────────────────────────────────────────────┤
+│ Id          │ Auto         │ Primary key                                     │
+│ Product     │ Text         │ Product title                                   │
+│ ASIN        │ Text         │ Amazon Standard Identification Number           │
+│ Link        │ URL          │ Direct product page link                        │
+│ Stock Photo │ URL          │ Main product image                              │
+│ Categories  │ Text         │ Category hierarchy                              │
+│ MSRP        │ Number       │ Current/last known price                        │
+│ Description │ Long Text    │ Product description                             │
+│ Keywords    │ Text         │ Search keywords                                 │
+│ Feature Bullets │ JSON     │ Product feature list                            │
+│ Response    │ JSON         │ Full API response (for debugging)               │
+│ CreatedAt   │ DateTime     │ Initial cache timestamp                         │
+│ UpdatedAt   │ DateTime     │ Last update timestamp                           │
+└─────────────┴──────────────┴─────────────────────────────────────────────────┘
+```
+
+See [`examples/sample-cache-structure.json`](./examples/sample-cache-structure.json) for the complete schema.
+
 ## Architecture
 
 ```
@@ -88,16 +132,16 @@ Retrieves product data from Airtable inventory by internal lot number:
 1. **Webhook** receives POST request with `mixedID` parameter
 2. **Code Node** analyzes input using regex patterns to detect identifier type
 3. **Switch** routes to appropriate sub-workflow based on detected type
-4. **Sub-workflows** fetch product data from APIs, cache results, and apply AI categorization
+4. **Sub-workflows** fetch product data from external APIs, cache results in NocoDB, and apply AI categorization
 5. **Response** returns unified product object with standardized fields
 
 ## Supported Identifier Types
 
 | Type | Pattern | Example | Data Sources |
 |------|---------|---------|--------------|
-| ASIN | Starts with `B0` | `B0DPMXVGJB` | Amazon API |
-| UPC | 7-8 or 10-14 digits | `012345678901` | Walmart, Target, Home Depot, Barcode Lookup |
-| FNSKU | Starts with `X0` | `X003Y2IPC7` | FNSKU-to-ASIN API → Amazon |
+| ASIN | Starts with `B0` | `B0DPMXVGJB` | ASIN Data API → Amazon |
+| UPC | 7-8 or 10-14 digits | `012345678901` | BlueCart, RedCircle, BigBox, Barcode Lookup |
+| FNSKU | Starts with `X0` | `X003Y2IPC7` | FNSKUtoASIN API → ASIN Data API |
 | URL | Valid HTTP(S) URL | `https://amazon.com/dp/...` | Retailer APIs, Firecrawl |
 | LOT | 6 digits | `218229` | Airtable Inventory |
 
@@ -106,13 +150,16 @@ Retrieves product data from Airtable inventory by internal lot number:
 ```
 product-info-lookup/
 ├── README.md
+├── examples/
+│   └── sample-cache-structure.json
 ├── screenshots/
 │   ├── main-workflow.png
 │   ├── asin-tool-workflow.png
 │   ├── upc-tool-workflow.png
 │   ├── fnsku-tool-workflow.png
 │   ├── url-tool-workflow.png
-│   └── lot-lookup-workflow.png
+│   ├── lot-lookup-workflow.png
+│   └── nocodb-cache-table.png
 └── workflows/
     ├── product-lookup-main.json
     ├── asin-tool.json
@@ -166,19 +213,19 @@ curl -X POST https://your-n8n-instance/webhook/product-lookup \
 ## Setup
 
 1. **Import Workflows** - Import the JSON files from `/workflows` into your n8n instance
-2. **Configure Credentials**:
+2. **Configure API Credentials**:
    - NocoDB API token
    - Airtable API key
-   - ASIN Data API key
-   - BlueCart API key (Walmart)
-   - RedCircle API key (Target)
-   - BigBox API key (Home Depot)
-   - Barcode Lookup API key
-   - FNSKUtoASIN API key
-   - Firecrawl API key
+   - ASIN Data API key ([asindataapi.com](https://www.asindataapi.com/))
+   - BlueCart API key ([bluecartapi.com](https://www.bluecartapi.com/))
+   - RedCircle API key ([redcircleapi.com](https://www.redcircleapi.com/))
+   - BigBox API key ([bigboxapi.com](https://www.bigboxapi.com/))
+   - Barcode Lookup API key ([barcodelookup.com](https://www.barcodelookup.com/api))
+   - FNSKUtoASIN API key ([fnskutoasin.com](https://fnskutoasin.com/))
+   - Firecrawl API key ([firecrawl.dev](https://firecrawl.dev/))
    - OpenAI API key
    - Google Gemini API key
-3. **Set Up Database Tables** - Create NocoDB tables for ASIN, UPC, FNSKU, and URL caching
+3. **Set Up Database Tables** - Create NocoDB tables for ASIN, UPC, FNSKU, and URL caching (see `examples/sample-cache-structure.json`)
 4. **Update Workflow IDs** - Replace placeholder workflow IDs with your actual sub-workflow IDs
 5. **Activate Webhook** - Enable the main workflow to expose the webhook endpoint
 

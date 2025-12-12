@@ -1,0 +1,91 @@
+{
+  "description": "Sample NocoDB ASIN cache table structure",
+  "table_name": "ASIN Data API",
+  "columns": [
+    {
+      "name": "Id",
+      "type": "auto_increment",
+      "description": "Primary key"
+    },
+    {
+      "name": "Product",
+      "type": "text",
+      "description": "Product title from Amazon",
+      "example": "[Older Version] SanDisk 128GB Ultra MicroSDXC UHS-I Memory Card with Adapter"
+    },
+    {
+      "name": "ASIN",
+      "type": "text",
+      "description": "Amazon Standard Identification Number",
+      "example": "B073JYC4XM"
+    },
+    {
+      "name": "Link",
+      "type": "url",
+      "description": "Direct link to Amazon product page",
+      "example": "https://www.amazon.com/dp/B073JYC4XM"
+    },
+    {
+      "name": "Stock Photo",
+      "type": "url",
+      "description": "Main product image URL",
+      "example": "https://m.media-amazon.com/images/I/51l5HURpwpL.jpg"
+    },
+    {
+      "name": "Categories",
+      "type": "text",
+      "description": "Product category hierarchy",
+      "example": "Electronics, Computers & Accessories, Memory Cards, Micro SD Cards"
+    },
+    {
+      "name": "MSRP",
+      "type": "number",
+      "description": "Current price from buybox",
+      "example": 14.20
+    },
+    {
+      "name": "Description",
+      "type": "long_text",
+      "description": "Product description from manufacturer"
+    },
+    {
+      "name": "Keywords",
+      "type": "text",
+      "description": "Search keywords extracted from listing"
+    },
+    {
+      "name": "Feature Bullets",
+      "type": "json",
+      "description": "Array of product feature bullet points"
+    },
+    {
+      "name": "Response",
+      "type": "json",
+      "description": "Full API response for reference/debugging"
+    },
+    {
+      "name": "CreatedAt",
+      "type": "datetime",
+      "description": "When the record was first cached"
+    },
+    {
+      "name": "UpdatedAt",
+      "type": "datetime",
+      "description": "Last price/data update timestamp"
+    }
+  ],
+  "sample_record": {
+    "Id": 1,
+    "Product": "[Older Version] SanDisk 128GB Ultra MicroSDXC UHS-I Memory Card with Adapter",
+    "ASIN": "B073JYC4XM",
+    "Link": "https://www.amazon.com/dp/B073JYC4XM",
+    "Stock Photo": "https://m.media-amazon.com/images/I/51l5HURpwpL.jpg",
+    "Categories": "Electronics, Computers & Accessories, Memory Cards, Micro SD Cards",
+    "MSRP": 14.20,
+    "Description": "SanDisk Ultra microSDXC and microSDHC cards are fast for better pictures...",
+    "Keywords": "SanDisk,128GB,Ultra,MicroSDXC,Memory,Card",
+    "Feature Bullets": "[\"Ideal for Android Smartphones and Tablets...\", \"Up to 100MB/s transfer read speed...\"]",
+    "CreatedAt": "2024-09-18T18:28:18.922Z",
+    "UpdatedAt": "2024-12-10T15:30:00.000Z"
+  }
+}
